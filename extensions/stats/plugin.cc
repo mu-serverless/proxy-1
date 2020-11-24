@@ -666,7 +666,7 @@ FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
       LOG_DEBUG(absl::StrCat("GW invalid capacity ", capacity->view()));
     }
     request_info_->upstream_avg_capacity = capacity_i;
-    LOG_WARN(absl::StrCat("####################avg queuelength per cluster ", queuelength->view(),
+    LOG_DEBUG(absl::StrCat("####################avg queuelength per cluster ", queuelength->view(),
                            "################### capacity ", capacity->view()));
     rootContext()->addToTCPRequestQueue(context_id_, request_info_);
     return FilterHeadersStatus::Continue;
