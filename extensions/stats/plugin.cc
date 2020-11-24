@@ -236,6 +236,24 @@ const std::vector<MetricFactory>& PluginRootContext::defaultMetrics() {
             return request_info.tcp_connections_closed;
           },
           true},
+      MetricFactory{
+          "http_total_forwards", MetricType::Counter,
+          [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
+            return request_info.http_total_forwards;
+          },
+          false},
+      MetricFactory{
+          "upstream_avg_queuelength", MetricType::Gauge,
+          [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
+            return request_info.upstream_avg_queuelength;
+          },
+          false},
+      MetricFactory{
+          "upstream_avg_capacity", MetricType::Gauge,
+          [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
+            return request_info.upstream_avg_capacity;
+          },
+          false},
   };
   return default_metrics;
 }
@@ -632,6 +650,26 @@ bool PluginRootContext::report(::Wasm::Common::RequestInfo& request_info,
   // TODO: When we have c++17, convert to try_emplace.
   metrics_.emplace(istio_dimensions_, stats);
   return true;
+}
+
+FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
+    request_info_->http_total_forwards++;
+    WasmDataPtr queuelength = getResponseHeader("avg-queuelength");
+    WasmDataPtr capacity = getResponseHeader("estimated-capacity");
+    int64_t queuelength_i = 0;
+    int64_t capacity_i = 0;
+    if (!absl::SimpleAtoi(queuelength->view(), &queuelength_i)) {
+      LOG_DEBUG(absl::StrCat("GW invalid queuelength ", queuelength->view()));
+    }
+    request_info_->upstream_queuelength = queuelength_i;
+    if (!absl::SimpleAtoi(capacity->view(), &capacity_i)) {
+      LOG_DEBUG(absl::StrCat("GW invalid capacity ", capacity->view()));
+    }
+    request_info_->upstream_capacity = capacity_i;
+    LOG_WARN(absl::StrCat("####################avg queuelength per cluster ", queuelength->view(),
+                           "################### capacity ", capacity->view()));
+    rootContext()->addToTCPRequestQueue(context_id_, request_info_);
+    return FilterHeadersStatus::Continue;
 }
 
 void PluginRootContext::addToTCPRequestQueue(

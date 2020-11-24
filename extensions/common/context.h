@@ -186,6 +186,12 @@ struct RequestInfo {
 
   bool is_populated = false;
   bool log_sampled = false;
+
+  // UCR private metrics
+  int64_t http_total_forwards = 0;
+  int64_t upstream_avg_queuelength = 0;
+  int64_t upstream_avg_capacity = 0;
+
 };
 
 // RequestContext contains all the information available in the request.

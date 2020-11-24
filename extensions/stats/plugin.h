@@ -313,6 +313,8 @@ class PluginContext : public Context {
     rootContext()->report(*request_info_, is_tcp_);
   };
 
+  FilterHeadersStatus onResponseHeaders(uint32_t, bool) override;
+
   FilterStatus onNewConnection() override {
     if (!rootContext()->initialized()) {
       return FilterStatus::Continue;
