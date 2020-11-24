@@ -661,11 +661,11 @@ FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
     if (!absl::SimpleAtoi(queuelength->view(), &queuelength_i)) {
       LOG_DEBUG(absl::StrCat("GW invalid queuelength ", queuelength->view()));
     }
-    request_info_->upstream_queuelength = queuelength_i;
+    request_info_->upstream_avg_queuelength = queuelength_i;
     if (!absl::SimpleAtoi(capacity->view(), &capacity_i)) {
       LOG_DEBUG(absl::StrCat("GW invalid capacity ", capacity->view()));
     }
-    request_info_->upstream_capacity = capacity_i;
+    request_info_->upstream_avg_capacity = capacity_i;
     LOG_WARN(absl::StrCat("####################avg queuelength per cluster ", queuelength->view(),
                            "################### capacity ", capacity->view()));
     rootContext()->addToTCPRequestQueue(context_id_, request_info_);
