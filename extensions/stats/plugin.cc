@@ -195,65 +195,70 @@ const std::vector<MetricFactory>& PluginRootContext::defaultMetrics() {
   static const std::vector<MetricFactory> default_metrics = {
       // HTTP, HTTP/2, and GRPC metrics
       MetricFactory{
+          "incoming_requests_total", MetricType::Counter,
+
+          [](const ::Wasm::Common::RequestInfo&) -> uint64_t { return 1; },
+          false, true},
+      MetricFactory{
           "requests_total", MetricType::Counter,
 
           [](const ::Wasm::Common::RequestInfo&) -> uint64_t { return 1; },
-          false},
+          false, false},
       MetricFactory{
           "request_duration_milliseconds", MetricType::Histogram,
           [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
             return request_info.duration /* in nanoseconds */ / 1000000;
           },
-          false},
+          false, false},
       MetricFactory{"request_bytes", MetricType::Histogram,
 
                     [](const ::Wasm::Common::RequestInfo& request_info)
                         -> uint64_t { return request_info.request_size; },
-                    false},
+                    false, false},
       MetricFactory{"response_bytes", MetricType::Histogram,
 
                     [](const ::Wasm::Common::RequestInfo& request_info)
                         -> uint64_t { return request_info.response_size; },
-                    false},
+                    false, false},
       // TCP metrics.
       MetricFactory{"tcp_sent_bytes_total", MetricType::Counter,
                     [](const ::Wasm::Common::RequestInfo& request_info)
                         -> uint64_t { return request_info.tcp_sent_bytes; },
-                    true},
+                    true, false},
       MetricFactory{"tcp_received_bytes_total", MetricType::Counter,
                     [](const ::Wasm::Common::RequestInfo& request_info)
                         -> uint64_t { return request_info.tcp_received_bytes; },
-                    true},
+                    true, false},
       MetricFactory{
           "tcp_connections_opened_total", MetricType::Counter,
           [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
             return request_info.tcp_connections_opened;
           },
-          true},
+          true, false},
       MetricFactory{
           "tcp_connections_closed_total", MetricType::Counter,
           [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
             return request_info.tcp_connections_closed;
           },
-          true},
+          true, false},
       MetricFactory{
           "http_total_forwards", MetricType::Counter,
           [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
             return request_info.http_total_forwards;
           },
-          false},
+          false, false},
       MetricFactory{
           "upstream_avg_queuelength", MetricType::Gauge,
           [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
             return request_info.upstream_avg_queuelength;
           },
-          false},
+          false,false},
       MetricFactory{
           "upstream_avg_capacity", MetricType::Gauge,
           [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
             return request_info.upstream_avg_capacity;
           },
-          false},
+          false, false},
   };
   return default_metrics;
 }
@@ -564,7 +569,7 @@ void PluginRootContext::onTick() {
 }
 
 bool PluginRootContext::report(::Wasm::Common::RequestInfo& request_info,
-                               bool is_tcp) {
+                               bool is_tcp, bool on_request) {
   std::string peer_id;
   bool peer_found = getValue({peer_metadata_id_key_}, &peer_id);
 
@@ -623,6 +628,9 @@ bool PluginRootContext::report(::Wasm::Common::RequestInfo& request_info,
   if (stats_it != metrics_.end()) {
     for (auto& stat : stats_it->second) {
       stat.record(request_info);
+      if (stat.on_request_ == on_request) {
+        stat.record(request_info);
+      }
       LOG_DEBUG(
           absl::StrCat("metricKey cache hit ", ", stat=", stat.metric_id_));
     }
@@ -643,6 +651,9 @@ bool PluginRootContext::report(::Wasm::Common::RequestInfo& request_info,
     LOG_DEBUG(absl::StrCat("metricKey cache miss ", statgen.name(), " ",
                            ", stat=", stat.metric_id_));
     stat.record(request_info);
+    if (stat.on_request_ == on_request) {
+      stat.record(request_info);
+    }
     stats.push_back(stat);
   }
 
@@ -650,6 +661,14 @@ bool PluginRootContext::report(::Wasm::Common::RequestInfo& request_info,
   // TODO: When we have c++17, convert to try_emplace.
   metrics_.emplace(istio_dimensions_, stats);
   return true;
+}
+
+FilterHeadersStatus PluginContext::onRequestHeaders(uint32_t, bool) {
+  if (!rootContext()->initialized()) {
+    return FilterHeadersStatus::Continue;
+  }
+  rootContext()->report(*request_info_, is_tcp_, true);
+  return FilterHeadersStatus::Continue;
 }
 
 FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
@@ -666,8 +685,8 @@ FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
       LOG_DEBUG(absl::StrCat("GW invalid capacity ", capacity->view()));
     }
     request_info_->upstream_avg_capacity = capacity_i;
-    LOG_DEBUG(absl::StrCat("####################avg queuelength per cluster ", queuelength->view(),
-                           "################### capacity ", capacity->view()));
+    LOG_DEBUG(absl::StrCat("####################context_id ",  context_id_ , "avg queuelength per cluster ", queuelength->view(),
+                           "################### capacity ", capacity->view(),"http_total_forwards ", request_info_->http_total_forwards));
     rootContext()->addToTCPRequestQueue(context_id_, request_info_);
     return FilterHeadersStatus::Continue;
 }

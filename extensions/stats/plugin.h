@@ -115,8 +115,8 @@ using ValueExtractorFn =
 // SimpleStat record a pre-resolved metric based on the values function.
 class SimpleStat {
  public:
-  SimpleStat(uint32_t metric_id, ValueExtractorFn value_fn)
-      : metric_id_(metric_id), value_fn_(value_fn){};
+  SimpleStat(uint32_t metric_id, ValueExtractorFn value_fn, bool on_request)
+      : metric_id_(metric_id), value_fn_(value_fn), on_request_(on_request) {};
 
   inline void record(const ::Wasm::Common::RequestInfo& request_info) {
     recordMetric(metric_id_, value_fn_(request_info));
@@ -126,6 +126,8 @@ class SimpleStat {
 
  private:
   ValueExtractorFn value_fn_;
+ public:
+  bool on_request_;
 };
 
 // MetricFactory creates a stat generator given tags.
@@ -134,6 +136,7 @@ struct MetricFactory {
   MetricType type;
   ValueExtractorFn extractor;
   bool is_tcp;
+  bool on_request;
 };
 
 // StatGen creates a SimpleStat based on resolved metric_id.
@@ -146,6 +149,7 @@ class StatGen {
                    const std::string& field_separator,
                    const std::string& value_separator)
       : is_tcp_(metric_factory.is_tcp),
+        on_request_(metric_factory.on_request),
         indexes_(indexes),
         extractor_(metric_factory.extractor),
         metric_(metric_factory.type,
@@ -190,11 +194,12 @@ class StatGen {
     }
     n.append(metric_.name);
     auto metric_id = metric_.resolveFullName(n);
-    return SimpleStat(metric_id, extractor_);
+    return SimpleStat(metric_id, extractor_, on_request_);
   };
 
  private:
   bool is_tcp_;
+  bool on_request_;
   std::vector<size_t> indexes_;
   ValueExtractorFn extractor_;
   Metric metric_;
@@ -224,7 +229,7 @@ class PluginRootContext : public RootContext {
   // Report will return false when peer metadata exchange is not found for TCP,
   // so that we wait to report metrics till we find peer metadata or get
   // information that it's not available.
-  bool report(::Wasm::Common::RequestInfo& request_info, bool is_tcp);
+  bool report(::Wasm::Common::RequestInfo& request_info, bool is_tcp, bool on_request = false);
   bool useHostHeaderFallback() const { return use_host_header_fallback_; };
   void addToTCPRequestQueue(
       uint32_t id, std::shared_ptr<::Wasm::Common::RequestInfo> request_info);
@@ -310,11 +315,11 @@ class PluginContext : public Context {
     if (is_tcp_) {
       cleanupTCPOnClose();
     }
-    rootContext()->report(*request_info_, is_tcp_);
+    rootContext()->report(*request_info_, is_tcp_, false);
   };
 
   FilterHeadersStatus onResponseHeaders(uint32_t, bool) override;
-
+  FilterHeadersStatus onRequestHeaders(uint32_t, bool) override;
   FilterStatus onNewConnection() override {
     if (!rootContext()->initialized()) {
       return FilterStatus::Continue;
