@@ -497,7 +497,6 @@ bool PluginRootContext::configure(size_t configuration_size) {
     }
   }
   proxy_set_tick_period_milliseconds(tcp_report_duration_milis);
-
   return true;
 }
 
@@ -558,7 +557,7 @@ void PluginRootContext::onTick() {
     Context* context = getContext(item.first);
     if (context == nullptr) {
       continue;
-    }
+    } 
     context->setEffectiveContext();
     if (report(*item.second, true)) {
       // Clear existing data in TCP metrics, so that we don't double count the
@@ -627,7 +626,6 @@ bool PluginRootContext::report(::Wasm::Common::RequestInfo& request_info,
   auto stats_it = metrics_.find(istio_dimensions_);
   if (stats_it != metrics_.end()) {
     for (auto& stat : stats_it->second) {
-      stat.record(request_info);
       if (stat.on_request_ == on_request) {
         stat.record(request_info);
       }
@@ -644,13 +642,13 @@ bool PluginRootContext::report(::Wasm::Common::RequestInfo& request_info,
 
   std::vector<SimpleStat> stats;
   for (auto& statgen : stats_) {
+    //only record TCP metrcis
     if (statgen.is_tcp_metric() != is_tcp) {
       continue;
     }
     auto stat = statgen.resolve(istio_dimensions_);
     LOG_DEBUG(absl::StrCat("metricKey cache miss ", statgen.name(), " ",
                            ", stat=", stat.metric_id_));
-    stat.record(request_info);
     if (stat.on_request_ == on_request) {
       stat.record(request_info);
     }
@@ -664,6 +662,7 @@ bool PluginRootContext::report(::Wasm::Common::RequestInfo& request_info,
 }
 
 FilterHeadersStatus PluginContext::onRequestHeaders(uint32_t, bool) {
+  request_info_->http_total_forwards++;
   if (!rootContext()->initialized()) {
     return FilterHeadersStatus::Continue;
   }
@@ -672,7 +671,6 @@ FilterHeadersStatus PluginContext::onRequestHeaders(uint32_t, bool) {
 }
 
 FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
-    request_info_->http_total_forwards++;
     WasmDataPtr queuelength = getResponseHeader("avg-queuelength");
     WasmDataPtr capacity = getResponseHeader("estimated-capacity");
     int64_t queuelength_i = 0;
@@ -687,7 +685,7 @@ FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
     request_info_->upstream_avg_capacity = capacity_i;
     LOG_DEBUG(absl::StrCat("####################context_id ",  context_id_ , "avg queuelength per cluster ", queuelength->view(),
                            "################### capacity ", capacity->view(),"http_total_forwards ", request_info_->http_total_forwards));
-    rootContext()->addToTCPRequestQueue(context_id_, request_info_);
+    //rootContext()->addToTCPRequestQueue(context_id_, request_info_);
     return FilterHeadersStatus::Continue;
 }
 
