@@ -259,6 +259,12 @@ const std::vector<MetricFactory>& PluginRootContext::defaultMetrics() {
             return request_info.upstream_avg_capacity;
           },
           false, false},
+      MetricFactory{
+          "upstream_avg_execution_time", MetricType::Gauge,
+          [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
+            return request_info.upstream_avg_execution_time;
+          },
+          false, false},
   };
   return default_metrics;
 }
@@ -673,8 +679,10 @@ FilterHeadersStatus PluginContext::onRequestHeaders(uint32_t, bool) {
 FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
     WasmDataPtr queuelength = getResponseHeader("avg-queuelength");
     WasmDataPtr capacity = getResponseHeader("estimated-capacity");
+    WasmDataPtr execution_time = getResponseHeader("avg-execution-time");
     int64_t queuelength_i = 0;
     int64_t capacity_i = 0;
+    int64_t execution_time_i = 0;
     if (!absl::SimpleAtoi(queuelength->view(), &queuelength_i)) {
       LOG_DEBUG(absl::StrCat("GW invalid queuelength ", queuelength->view()));
     }
@@ -683,8 +691,14 @@ FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
       LOG_DEBUG(absl::StrCat("GW invalid capacity ", capacity->view()));
     }
     request_info_->upstream_avg_capacity = capacity_i;
+
+    if (!absl::SimpleAtoi(execution_time->view(), &execution_time_i)) {
+      LOG_DEBUG(absl::StrCat("GW invalid execution time ", execution_time->view()));
+    }
+    request_info_->upstream_avg_execution_time = execution_time_i;
     LOG_DEBUG(absl::StrCat("####################context_id ",  context_id_ , "avg queuelength per cluster ", queuelength->view(),
-                           "################### capacity ", capacity->view(),"http_total_forwards ", request_info_->http_total_forwards));
+                           "################### capacity ", capacity->view(), " avg execution time per cluster ", execution_time->view(),
+			   "http_total_forwards ", request_info_->http_total_forwards));
     //rootContext()->addToTCPRequestQueue(context_id_, request_info_);
     return FilterHeadersStatus::Continue;
 }
