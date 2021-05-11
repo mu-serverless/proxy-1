@@ -190,8 +190,11 @@ struct RequestInfo {
   // UCR private metrics
   int64_t http_total_forwards = 0;
   int64_t upstream_avg_queuelength = 0;
+  int64_t upstream_avg_pb_queuelength = 0;
   int64_t upstream_avg_capacity = 0;
+  int64_t upstream_avg_pb_capacity = 0;
   int64_t upstream_avg_execution_time = 0;
+  int64_t upstream_avg_confidence = 0;
 
 };
 

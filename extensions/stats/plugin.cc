@@ -260,9 +260,27 @@ const std::vector<MetricFactory>& PluginRootContext::defaultMetrics() {
           },
           false, false},
       MetricFactory{
+          "upstream_avg_pb_capacity", MetricType::Gauge,
+          [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
+            return request_info.upstream_avg_pb_capacity;
+          },
+          false, false},
+      MetricFactory{
+          "upstream_avg_pb_queuelength", MetricType::Gauge,
+          [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
+            return request_info.upstream_avg_pb_queuelength;
+          },
+          false, false},
+      MetricFactory{
           "upstream_avg_execution_time", MetricType::Gauge,
           [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
             return request_info.upstream_avg_execution_time;
+          },
+          false, false},
+      MetricFactory{
+          "upstream_avg_confidence", MetricType::Gauge,
+          [](const ::Wasm::Common::RequestInfo& request_info) -> uint64_t {
+            return request_info.upstream_avg_confidence;
           },
           false, false},
   };
@@ -678,11 +696,18 @@ FilterHeadersStatus PluginContext::onRequestHeaders(uint32_t, bool) {
 
 FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
     WasmDataPtr queuelength = getResponseHeader("avg-queuelength");
+    WasmDataPtr pb_queuelength = getResponseHeader("avg-pb-queuelength");
     WasmDataPtr capacity = getResponseHeader("estimated-capacity");
+    WasmDataPtr pb_capacity = getResponseHeader("avg-pb-capacity");
     WasmDataPtr execution_time = getResponseHeader("avg-execution-time");
+    WasmDataPtr confidence = getResponseHeader("avg-confidence");
     int64_t queuelength_i = 0;
     int64_t capacity_i = 0;
     int64_t execution_time_i = 0;
+    int64_t pb_queuelength_i = 0;
+    int64_t pb_capacity_i = 0;
+    int64_t confidence_i = 0;
+
     if (!absl::SimpleAtoi(queuelength->view(), &queuelength_i)) {
       LOG_DEBUG(absl::StrCat("GW invalid queuelength ", queuelength->view()));
     }
@@ -696,8 +721,25 @@ FilterHeadersStatus PluginContext::onResponseHeaders(uint32_t, bool) {
       LOG_DEBUG(absl::StrCat("GW invalid execution time ", execution_time->view()));
     }
     request_info_->upstream_avg_execution_time = execution_time_i;
+
+    if (!absl::SimpleAtoi(pb_queuelength->view(), &pb_queuelength_i)) {
+      LOG_DEBUG(absl::StrCat("GW invalid piggyback queuelength ", pb_queuelength->view()));
+    }
+    request_info_->upstream_avg_pb_queuelength = pb_queuelength_i;
+
+    if (!absl::SimpleAtoi(pb_capacity->view(), &pb_capacity_i)) {
+      LOG_DEBUG(absl::StrCat("GW invalid piggyback capacity ", pb_capacity->view()));
+    }
+    request_info_->upstream_avg_pb_capacity = pb_capacity_i;
+
+    if (!absl::SimpleAtoi(confidence->view(), &confidence_i)) {
+      LOG_DEBUG(absl::StrCat("GW invalid piggyback confidence ", confidence->view()));
+    }
+    request_info_->upstream_avg_confidence = confidence_i;
     LOG_DEBUG(absl::StrCat("####################context_id ",  context_id_ , "avg queuelength per cluster ", queuelength->view(),
                            "################### capacity ", capacity->view(), " avg execution time per cluster ", execution_time->view(),
+                           "################### avg piggyback queuelength ", pb_queuelength->view(), " avg piggyback capacity ", pb_capacity->view(),
+                           "################### avg confidence ", confidence->view(),
 			   "http_total_forwards ", request_info_->http_total_forwards));
     //rootContext()->addToTCPRequestQueue(context_id_, request_info_);
     return FilterHeadersStatus::Continue;
